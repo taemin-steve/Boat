@@ -36,6 +36,13 @@ class World {
         this.controls.dampingFactor = 0.05;
         this.controls.maxDistance = 1000; // 카메라 최대 거리 제한
         
+        // 우클릭 비활성화 (우클릭 이벤트가 다른 이벤트 핸들러에 전달되도록)
+        this.controls.mouseButtons = {
+            LEFT: THREE.MOUSE.ROTATE,
+            MIDDLE: THREE.MOUSE.DOLLY
+            // RIGHT 속성 제거하여 우클릭 비활성화
+        };
+        
         // 이벤트 리스너 등록
         window.addEventListener('resize', this.onWindowResize.bind(this));
     }

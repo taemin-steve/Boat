@@ -28,21 +28,17 @@ class ManualMovement extends MovementStrategy {
     setupEventListeners() {
         // 키 다운 이벤트
         window.addEventListener('keydown', (event) => {
-            switch (event.key.toLowerCase()) {
-                case 'w':
-                case 'arrowup':
+            switch (event.key) {
+                case 'ArrowUp':
                     this.keys.forward = true;
                     break;
-                case 's':
-                case 'arrowdown':
+                case 'ArrowDown':
                     this.keys.backward = true;
                     break;
-                case 'a':
-                case 'arrowleft':
+                case 'ArrowLeft':
                     this.keys.left = true;
                     break;
-                case 'd':
-                case 'arrowright':
+                case 'ArrowRight':
                     this.keys.right = true;
                     break;
             }
@@ -50,21 +46,17 @@ class ManualMovement extends MovementStrategy {
         
         // 키 업 이벤트
         window.addEventListener('keyup', (event) => {
-            switch (event.key.toLowerCase()) {
-                case 'w':
-                case 'arrowup':
+            switch (event.key) {
+                case 'ArrowUp':
                     this.keys.forward = false;
                     break;
-                case 's':
-                case 'arrowdown':
+                case 'ArrowDown':
                     this.keys.backward = false;
                     break;
-                case 'a':
-                case 'arrowleft':
+                case 'ArrowLeft':
                     this.keys.left = false;
                     break;
-                case 'd':
-                case 'arrowright':
+                case 'ArrowRight':
                     this.keys.right = false;
                     break;
             }

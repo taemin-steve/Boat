@@ -13,6 +13,19 @@
             display: block;
         }
     </style>
+    <script>
+        // 브라우저의 기본 컨텍스트 메뉴 방지
+        document.addEventListener('contextmenu', (event) => {
+            event.preventDefault();
+            console.log('우클릭 감지됨!');
+            return false;
+        }, false);
+        
+        // 키 이벤트 디버깅
+        document.addEventListener('keydown', (event) => {
+            console.log(`키 눌림 감지: ${event.key}`);
+        }, false);
+    </script>
 </head>
 <body>
     <script src="src/index.js" type="module"></script>

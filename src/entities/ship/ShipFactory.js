@@ -3,6 +3,8 @@ import Ship from './Ship.js';
 import PatrolBoat from './PatrolBoat.js';
 import CargoShip from './CargoShip.js';
 import SailingShip from './SailingShip.js';
+import AttackDroneShip from './AttackDroneShip.js';
+
 
 // Movement Strategies
 import ManualMovement from './movement/ManualMovement.js';
@@ -14,7 +16,7 @@ import AutoMovement from './movement/AutoMovement.js';
 class ShipFactory {
     /**
      * 선박 타입에 따라 적절한 선박 객체 생성
-     * @param {string} type - 선박 유형 (patrol, cargo, sailing)
+     * @param {string} type - 선박 유형 (patrol, cargo, sailing, drone)
      * @param {object} options - 선박 생성 옵션
      * @returns {Ship} 생성된 선박 객체
      */
@@ -32,6 +34,10 @@ class ShipFactory {
                 
             case 'sailing':
                 ship = new SailingShip(options);
+                break;
+            
+            case 'drone':
+                ship = new AttackDroneShip(options);
                 break;
                 
             default:
@@ -75,9 +81,6 @@ class ShipFactory {
                 }
                 return new AutoMovement(options);
                 
-            case 'ai':
-                return new AIMovement(options);
-                
             default:
                 console.warn(`Unknown movement type: ${type}. No movement strategy assigned.`);
                 return null;
@@ -86,7 +89,7 @@ class ShipFactory {
     
     /**
      * 유형별 함대 생성
-     * @param {string} type - 함대 유형 (mixed, patrol, cargo, sailing)
+     * @param {string} type - 함대 유형 (mixed, patrol, cargo, sailing, drone)
      * @param {number} count - 생성할 배의 수
      * @param {object} options - 함대 생성 옵션
      * @returns {Array<Ship>} 선박 객체 배열
@@ -110,7 +113,7 @@ class ShipFactory {
             let shipType;
             if (type === 'mixed') {
                 // 혼합 함대의 경우 랜덤하게 선택
-                const types = ['patrol', 'cargo', 'sailing'];
+                const types = ['patrol', 'cargo', 'sailing', 'drone'];
                 shipType = types[Math.floor(Math.random() * types.length)];
             } else {
                 shipType = type;

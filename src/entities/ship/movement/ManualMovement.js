@@ -16,8 +16,8 @@ class ManualMovement extends MovementStrategy {
         };
         
         // 기본 설정
-        this.acceleration = 0.01; // 가속도
-        this.maxSpeed = 0.2;    // 최대 속도
+        this.acceleration = 0.05; // 가속도
+        this.maxSpeed = 0.4;    // 최대 속도
         this.rotationSpeed = 0.03; // 회전 속도
         this.deceleration = 0.005; // 감속도
         
@@ -75,28 +75,19 @@ class ManualMovement extends MovementStrategy {
         if (!ship || !ship.mesh) return;
         
         // 속도 변경 (가속/감속)
-        if (this.keys.forward) {
-            ship.speed = Math.min(ship.speed + this.acceleration, this.maxSpeed);
-        } else if (this.keys.backward) {
-            ship.speed = Math.max(ship.speed - this.acceleration, -this.maxSpeed / 2);
-        } 
-        // else {
-        //     // 자연 감속 (키를 누르지 않으면 서서히 멈춤)
-        //     if (Math.abs(ship.speed) < this.deceleration) {
-        //         ship.speed = 0;
-        //     } else if (ship.speed > 0) {
-        //         ship.speed -= this.deceleration;
-        //     } else if (ship.speed < 0) {
-        //         ship.speed += this.deceleration;
-        //     }
-        // }
-        else {
-            // 부드러운 자연 감속
-            ship.speed *= 0.98;
-            if (Math.abs(ship.speed) < 0.0001) {
-                ship.speed = 0;
-            }
+    if (this.keys.forward) {
+        ship.speed += this.acceleration;
+        ship.speed = Math.min(ship.speed, this.maxSpeed);
+    } else if (this.keys.backward) {
+        ship.speed -= this.acceleration;
+        ship.speed = Math.max(ship.speed, -this.maxSpeed / 2);
+    } else {
+        // 부드러운 자연 감속
+        ship.speed *= 0.995;
+        if (Math.abs(ship.speed) < 0.0001) {
+            ship.speed = 0;
         }
+    }
         
         // 방향 변경
         if (this.keys.left) {

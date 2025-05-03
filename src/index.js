@@ -3,8 +3,8 @@ import World from './World';
 import Ocean from './components/Ocean';
 import Sky from './components/Sky';
 import Lighting from './components/Lighting';
-import ShipFactory from './entities/ShipFactory';
-import ManualMovement from './entities/movement/ManualMovement';
+import ShipFactory from './entities/ship/ShipFactory';
+import ManualMovement from './entities/ship/movement/ManualMovement';
 
 // 월드 생성
 const world = new World();

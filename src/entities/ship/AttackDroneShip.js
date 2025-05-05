@@ -230,7 +230,7 @@ class AttackDroneShip extends Ship {
         
         // 운항용 카메라와 완전히 같은 위치에 EOIR 카메라 배치 (선체에 부착된 형태)
         const cameraOffsetForward = 2; // 선수로부터 전방 오프셋 (운항용 카메라와 동일)
-        const cameraHeight = 1.5;      // 선체 위 높이 (운항용 카메라와 동일)
+        const cameraHeight = 4;      // 선체 위 높이 (운항용 카메라와 동일)
         
         // EOIR 카메라 위치 설정 (운항용 카메라와 동일한 위치)
         position.x += Math.sin(direction) * cameraOffsetForward;

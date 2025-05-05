@@ -5,22 +5,40 @@ import Sky from './components/Sky';
 import Lighting from './components/Lighting';
 import ShipFactory from './entities/ship/ShipFactory';
 import ManualMovement from './entities/ship/movement/ManualMovement';
+import AutoMovement from './entities/ship/movement/AutoMovement';
 
 // 전역 변수 선언
 let world;
-let mainShip;
-let activeCamera;
-let thirdPersonCamera;
+let mainShip; // 현재 선택된 선박 (제어 대상)
+let activeCamera; // 현재 활성화된 카메라 (1인칭 또는 3인칭)
 let useShipCamera = true; // 기본적으로 드론 카메라 사용
+let ourFleet; // 드론 함대 배열
+let activeShipIndex = 0; // 현재 활성화된 선박의 인덱스
 
 // 화면 분할 변수
 let splitScreenMode = true; // 분할 화면 모드 활성화
 let eoirViewport = { x: 0, y: 0, width: 0, height: 0 }; // EOIR 뷰포트
 let mainViewport = { x: 0, y: 0, width: 0, height: 0 }; // 메인 뷰포트
 
+// EOIR 외부 창 관련 변수
+let eoirWindow = null;
+let isEoirWindowOpen = false;
+let eoirFrameCount = 0;
+
 // 최상위 레벨에서 키 이벤트 리스너 등록
 document.addEventListener('keydown', (event) => {
     console.log(`index.js에서 감지된 키: ${event.key}`);
+    
+    // Control + 숫자키로 선박 전환
+    if (event.ctrlKey && !isNaN(parseInt(event.key)) && parseInt(event.key) > 0) {
+        const shipIndex = parseInt(event.key) - 1; // 0부터 시작하는 인덱스로 변환
+        if (ourFleet && shipIndex < ourFleet.length) {
+            switchActiveShip(shipIndex);
+            console.log(`${shipIndex + 1}번 드론으로 전환했습니다.`);
+            event.preventDefault();
+            return;
+        }
+    }
     
     // EOIR 카메라 제어 키 처리 (WASD는 항상 EOIR 카메라 제어에 사용)
     if (mainShip && mainShip.eoirControls && mainShip.eoirControls.keys) {
@@ -81,7 +99,7 @@ document.addEventListener('keydown', (event) => {
     if (event.key === 'c' || event.key === 'C') {
         // 'C' 키를 누르면 카메라 모드 전환
         useShipCamera = !useShipCamera;
-        console.log(`카메라 모드 변경: ${useShipCamera ? '드론 1인칭 시점' : '3인칭 시점'}`);
+        console.log(`카메라 모드 변경: ${useShipCamera ? '드론 1인칭 카메라' : '3인칭 외부 카메라'}`);
         event.preventDefault();
     }
     
@@ -121,6 +139,12 @@ document.addEventListener('keydown', (event) => {
         splitScreenMode = !splitScreenMode;
         console.log(`분할 화면 모드: ${splitScreenMode ? '활성화' : '비활성화'}`);
         updateViewports(); // 뷰포트 재계산
+        event.preventDefault();
+    }
+    
+    // 'O' 키를 누르면 EOIR 창 열기/닫기
+    if (event.key === 'o' || event.key === 'O') {
+        toggleEoirWindow();
         event.preventDefault();
     }
 }, true); // 캡처 단계에서 이벤트 처리 (true)
@@ -215,11 +239,6 @@ function updateViewports() {
     }
     
     // 카메라 종횡비 업데이트
-    if (thirdPersonCamera) {
-        thirdPersonCamera.aspect = mainViewport.width / mainViewport.height;
-        thirdPersonCamera.updateProjectionMatrix();
-    }
-    
     if (mainShip) {
         if (mainShip.shipCamera) {
             mainShip.shipCamera.aspect = mainViewport.width / mainViewport.height;
@@ -235,43 +254,71 @@ function updateViewports() {
 
 // 메인 초기화 함수
 function initializeApp() {
-    // 월드 생성
+// 월드 생성
     world = new World();
 
-    // 컴포넌트 추가
-    const sky = new Sky();
-    sky.create(world.scene);
-    world.addComponent('sky', sky);
+// 컴포넌트 추가
+const sky = new Sky();
+sky.create(world.scene);
+world.addComponent('sky', sky);
 
-    const lighting = new Lighting();
-    lighting.create(world.scene);
-    world.addComponent('lighting', lighting);
+const lighting = new Lighting();
+lighting.create(world.scene);
+world.addComponent('lighting', lighting);
 
-    const ocean = new Ocean();
-    ocean.create(world.scene);
-    world.addComponent('ocean', ocean);
+const ocean = new Ocean();
+ocean.create(world.scene);
+world.addComponent('ocean', ocean);
 
-    // 메인 선박 추가 (AttackDroneShip으로 변경)
-    mainShip = ShipFactory.createShip('drone', {
-        position: new THREE.Vector3(0, 0, 0),
-        size: { length: 12, width: 6, height: 3 },
-        color: 0xFF5500, // 밝은 주황색
-        bouyancyFactor: 1.4, // 높은 부력
-        pitchFactor: 0.9,    // 안정적인 피치
-        rollFactor: 0.8,     // 안정적인 롤링
-        movementType: 'manual' // 수동 조작 전략 사용
+    // 추가 공격용 드론 5대 생성 (일렬 배치, 간격 50)
+    // 첫 번째 드론은 수동 제어, 나머지는 자동 제어로 설정
+    const droneOptions = {
+        movementType: 'auto',  // 기본적으로 자동 제어
+        basePosition: new THREE.Vector3(0, 0, 0)  // 원점에서 시작
+    };
+    
+    ourFleet = world.createDroneFleet(ShipFactory, 5, 50, droneOptions);
+    
+    // 각 드론에 고유한 속성 부여
+    ourFleet.forEach((drone, index) => {
+        // 첫 번째 드론만 수동 제어로 설정
+        if (index === 0) {
+            if (drone.movementStrategy) {
+                // 기존 이동 전략 제거
+                drone.movementStrategy = null;
+                
+                // 수동 이동 전략 적용
+                drone.movementStrategy = new ManualMovement(drone);
+            }
+        } else {
+            // 나머지 드론은 자동 이동 전략 적용
+            if (drone.movementStrategy) {
+                // 기존 이동 전략 제거
+                drone.movementStrategy = null;
+                
+                // 자동 이동 전략 적용
+                drone.movementStrategy = new AutoMovement(drone);
+            }
+        }
+        
+        // 각 드론에 ID 부여
+        drone.id = `Drone-${index + 1}`;
     });
-
-    world.addEntity(mainShip);
-
-    // 드론의 카메라 헬퍼를 씬에 추가 (필요시 활성화)
-    if (mainShip.addCameraHelperToScene) {
-        mainShip.addCameraHelperToScene(world.scene);
-    }
-
+    
+    // 첫 번째 드론을 메인 선박으로 설정
+    mainShip = ourFleet[0];
+    activeShipIndex = 0;
+    
+    // 모든 드론을 월드에 추가
+    ourFleet.forEach(drone => {
+        world.addEntity(drone);
+    });
+    
+    // 메인 선박을 World에 등록
+    world.setMainShip(mainShip);
+    
     // 카메라 설정 및 관리
     activeCamera = world.camera; // 기본값은 월드 카메라 (3인칭)
-    thirdPersonCamera = world.camera; // 3인칭 카메라 참조 저장
     
     // 초기 뷰포트 설정
     updateViewports();
@@ -315,61 +362,49 @@ function initializeApp() {
             
             // 뷰 정보 표시
             drawViewInfo();
+            
+            // EOIR 창이 열려있으면 프레임 캡처 및 전송
+            captureAndSendEoirFrame();
         } else {
             // 전체 화면 모드 - 활성 카메라만 사용
             renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
             renderer.setScissor(0, 0, window.innerWidth, window.innerHeight);
             renderer.setScissorTest(false);
             renderer.render(world.scene, activeCamera);
+            
+            // EOIR 창이 열려있으면 프레임 캡처 및 전송
+            captureAndSendEoirFrame();
         }
     };
 
     // 애니메이션 시작
     world.start();
 
-    // 기능 설명 표시
-    console.log('배 시뮬레이션 조작법:');
-    console.log('=== 배 이동 컨트롤 (화살표 키) ===');
-    console.log('↑: 전진, ↓: 후진');
-    console.log('←: 좌회전, →: 우회전');
-    console.log('')
-    console.log('=== EOIR 카메라 컨트롤 (WASD 키) ===');
-    console.log('W: EOIR 카메라 위쪽 틸트, S: EOIR 카메라 아래쪽 틸트');
-    console.log('A: EOIR 카메라 왼쪽 패닝, D: EOIR 카메라 오른쪽 패닝');
-    console.log('Q: EOIR 카메라 줌인, E: EOIR 카메라 줌아웃');
-    console.log('')
-    console.log('=== 기타 컨트롤 ===');
-    console.log('C: 카메라 모드 변경 (1인칭/3인칭)');
-    console.log('V: 분할 화면 모드 토글');
-    console.log('H: 카메라 헬퍼 표시 토글 (디버깅용)');
-    console.log('R: 무기 충전');
-    console.log('F: 무기 발사');
 }
 
 // 카메라 업데이트 함수
 const updateCameras = () => {
     if (!mainShip || !mainShip.mesh) return;
     
-    // 3인칭 카메라 업데이트
-    const offset = new THREE.Vector3(
-        -Math.sin(mainShip.direction) * 30,
-        20,
-        -Math.cos(mainShip.direction) * 30
-    );
-    
-    // 3인칭 카메라 위치 부드럽게 업데이트
-    thirdPersonCamera.position.lerp(
-        mainShip.mesh.position.clone().add(offset), 
-        0.05
-    );
-    
-    thirdPersonCamera.lookAt(mainShip.mesh.position);
-    
     // 현재 활성화된 카메라 결정
     if (useShipCamera && mainShip.shipCamera) {
         activeCamera = mainShip.shipCamera;
     } else {
-        activeCamera = thirdPersonCamera;
+        // 3인칭 시점 - 월드 카메라를 활성 선박 뒤에 위치시킴
+        const offset = new THREE.Vector3(
+            -Math.sin(mainShip.direction) * 30,
+            20,
+            -Math.cos(mainShip.direction) * 30
+        );
+        
+        // 월드 카메라 위치 부드럽게 업데이트
+        world.camera.position.lerp(
+            mainShip.mesh.position.clone().add(offset), 
+            0.05
+        );
+        
+        world.camera.lookAt(mainShip.mesh.position);
+        activeCamera = world.camera;
     }
 };
 
@@ -432,10 +467,10 @@ const drawViewInfo = () => {
     }
     
     // 위치와 내용 업데이트
-    mainViewLabel.textContent = `메인 카메라 ${useShipCamera ? '(1인칭)' : '(3인칭)'} - 화살표 키로 이동`;
+    mainViewLabel.textContent = `드론 #${activeShipIndex + 1} ${useShipCamera ? '(1인칭 카메라)' : '(3인칭 카메라)'} - 화살표 키로 이동 | Ctrl+숫자로 드론 전환`;
     mainViewLabel.style.display = splitScreenMode ? 'block' : 'none';
     
-    eoirViewLabel.textContent = `EOIR 카메라 - WASDQE로 제어`;
+    eoirViewLabel.textContent = `드론 #${activeShipIndex + 1} EOIR 카메라 - WASDQE로 제어`;
     eoirViewLabel.style.left = (window.innerWidth / 2 + 10) + 'px';
     eoirViewLabel.style.display = splitScreenMode ? 'block' : 'none';
     
@@ -506,9 +541,149 @@ const drawViewInfo = () => {
         document.body.appendChild(moveGuide);
     }
     
-    moveGuide.innerHTML = `배 조종: ↑/↓ - 전진/후진 | ←/→ - 좌/우회전 | C - 카메라 전환 | V - 화면분할 전환`;
+    moveGuide.innerHTML = `조작: ↑/↓ - 전진/후진 | ←/→ - 좌/우회전 | C - 카메라 전환 | V - 화면분할 | Ctrl+1~5 - 드론 전환`;
     moveGuide.style.display = 'block';
 };
+
+// EOIR 창을 열거나 닫는 함수
+function toggleEoirWindow() {
+    if (isEoirWindowOpen && eoirWindow && !eoirWindow.closed) {
+        eoirWindow.close();
+        isEoirWindowOpen = false;
+        console.log('EOIR 창 닫기');
+    } else {
+        // 새 창 열기
+        eoirWindow = window.open('eoir-view.html', 'EOIR View', 'width=800,height=600,resizable=yes');
+        if (eoirWindow) {
+            isEoirWindowOpen = true;
+            console.log('EOIR 창 열기');
+            
+            // 창이 닫힐 때 상태 업데이트
+            eoirWindow.addEventListener('beforeunload', () => {
+                isEoirWindowOpen = false;
+                console.log('EOIR 창이 닫혔습니다');
+            });
+        } else {
+            console.error('EOIR 창을 열 수 없습니다. 팝업 차단을 확인하세요.');
+        }
+    }
+}
+
+// EOIR 이미지를 캡처하고 새 창으로 전송하는 함수
+function captureAndSendEoirFrame() {
+    if (!isEoirWindowOpen || !eoirWindow || eoirWindow.closed || !mainShip || !mainShip.eoirCamera) {
+        return;
+    }
+    
+    // 2프레임마다 업데이트 (성능 최적화)
+    if (eoirFrameCount++ % 2 !== 0) {
+        return;
+    }
+    
+    // 렌더링된 이미지 캡처
+    const renderer = world.renderer;
+    
+    // 150% 해상도로 증가 (더 선명한 이미지를 위해)
+    const scale = 1.5;
+    const width = Math.floor(renderer.domElement.width * scale);
+    const height = Math.floor(renderer.domElement.height * scale);
+    
+    // 임시 렌더 대상 생성 (고해상도)
+    const renderTarget = new THREE.WebGLRenderTarget(width, height, {
+        minFilter: THREE.LinearFilter,
+        magFilter: THREE.LinearFilter,
+        format: THREE.RGBAFormat,
+        encoding: THREE.sRGBEncoding
+    });
+    
+    // 원래 렌더러 설정 백업
+    const originalRenderTarget = renderer.getRenderTarget();
+    
+    // 현재 선택된 드론의 EOIR 카메라로 씬을 렌더링
+    renderer.setRenderTarget(renderTarget);
+    renderer.render(world.scene, mainShip.eoirCamera);
+    
+    // 렌더링된 이미지 데이터 가져오기
+    const buffer = new Uint8Array(width * height * 4);
+    renderer.readRenderTargetPixels(renderTarget, 0, 0, width, height, buffer);
+    
+    // 원래 렌더 대상으로 복원
+    renderer.setRenderTarget(originalRenderTarget);
+    
+    // 캔버스 생성 및 이미지 데이터 변환
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d');
+    
+    // 이미지 데이터 생성
+    const imageData = context.createImageData(width, height);
+    imageData.data.set(buffer);
+    context.putImageData(imageData, 0, 0);
+    
+    // 이미지 후처리 - 선명도 향상
+    context.filter = 'contrast(1.1) brightness(1.05) saturate(1.2)';
+    context.drawImage(canvas, 0, 0);
+    context.filter = 'none';
+    
+    // 드론 번호 및 상태 정보 표시
+    context.font = 'bold 16px Arial';
+    context.fillStyle = '#00FF00';
+    context.fillText(`드론 #${activeShipIndex + 1} EOIR`, 20, 30);
+    
+    // 이미지를 고품질 JPEG로 변환 (0.92 품질)
+    const dataURL = canvas.toDataURL('image/jpeg', 0.92);
+    
+    // 새 창으로 데이터 전송
+    eoirWindow.postMessage({
+        type: 'eoirFrame',
+        imageData: dataURL,
+        isDestroyed: false, // 필요한 경우 파괴 상태 설정
+        droneId: activeShipIndex + 1 // 현재 드론 번호 전달
+    }, '*');
+    
+    // 렌더 대상 해제
+    renderTarget.dispose();
+}
+
+// 선박 전환 함수
+function switchActiveShip(newIndex) {
+    if (!ourFleet || newIndex >= ourFleet.length) return;
+    
+    // 이전 활성 선박의 움직임 타입을 자동으로 변경
+    if (mainShip && mainShip.movementStrategy) {
+        // 기존 이동 전략이 수동 제어인 경우 자동 제어로 변경
+        if (mainShip.movementStrategy instanceof ManualMovement) {
+            // 기존 수동 이동 전략 제거
+            mainShip.movementStrategy = null;
+            
+            // 자동 이동 전략으로 교체
+            mainShip.movementStrategy = new AutoMovement(mainShip);
+        }
+    }
+    
+    // 인덱스 업데이트
+    activeShipIndex = newIndex;
+    mainShip = ourFleet[activeShipIndex];
+    
+    // 새 선박의 움직임 타입을 수동으로 변경
+    if (mainShip && mainShip.movementStrategy) {
+        // 기존 이동 전략 제거
+        mainShip.movementStrategy = null;
+        
+        // 수동 이동 전략 적용
+        mainShip.movementStrategy = new ManualMovement(mainShip);
+    }
+    
+    // 메인 선박을 World에 등록
+    world.setMainShip(mainShip);
+    
+    // 카메라 업데이트
+    updateCameras();
+    
+    // 뷰포트 업데이트
+    updateViewports();
+}
 
 // 앱 초기화
 document.addEventListener('DOMContentLoaded', initializeApp); 

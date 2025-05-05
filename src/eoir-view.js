@@ -99,6 +99,25 @@ function createUIElements() {
     uiScene.add(blMarker);
     uiScene.add(brMarker);
     
+    // 드론 ID 텍스트 표시를 위한 캔버스 생성
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#00FF00';
+    ctx.font = 'bold 24px Arial';
+    ctx.fillText('드론 #1 EOIR', 10, 30);
+    
+    const droneIdTexture = new THREE.CanvasTexture(canvas);
+    const droneIdMaterial = new THREE.SpriteMaterial({
+        map: droneIdTexture,
+        transparent: true
+    });
+    const droneIdSprite = new THREE.Sprite(droneIdMaterial);
+    droneIdSprite.scale.set(0.5, 0.12, 1);
+    droneIdSprite.position.set(-0.7, 0.9, 0);
+    uiScene.add(droneIdSprite);
+    
     // 경계 가이드라인
     const borderGeometry = new THREE.BufferGeometry().setFromPoints([
         new THREE.Vector3(-0.98, -0.98, 0),
@@ -117,7 +136,9 @@ function createUIElements() {
     return {
         crosshair: { hLine, vLine, circle },
         corners: { tlMarker, trMarker, blMarker, brMarker },
-        border: borderLine
+        border: borderLine,
+        droneIdSprite: droneIdSprite,
+        droneIdCanvas: canvas
     };
 }
 
@@ -266,6 +287,20 @@ window.addEventListener('message', async (event) => {
             
             // 파괴 상태에 따라 오버레이 표시/숨김
             destroyedOverlay.visible = event.data.isDestroyed;
+            
+            // 드론 ID 업데이트
+            if (event.data.droneId !== undefined && uiElements && uiElements.droneIdCanvas && uiElements.droneIdSprite) {
+                const ctx = uiElements.droneIdCanvas.getContext('2d');
+                ctx.clearRect(0, 0, uiElements.droneIdCanvas.width, uiElements.droneIdCanvas.height);
+                ctx.fillStyle = '#00FF00';
+                ctx.font = 'bold 24px Arial';
+                ctx.fillText(`드론 #${event.data.droneId} EOIR`, 10, 30);
+                
+                // 텍스처 업데이트
+                if (uiElements.droneIdSprite.material && uiElements.droneIdSprite.material.map) {
+                    uiElements.droneIdSprite.material.map.needsUpdate = true;
+                }
+            }
         } catch (error) {
             console.error('텍스처 로딩 실패:', error);
             currentTexturePromise = null;

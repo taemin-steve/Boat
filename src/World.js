@@ -14,6 +14,7 @@ class World {
         
         // 엔티티 저장
         this.entities = [];
+        this.mainShip = null; // 메인 선박 참조 저장
         
         // 기본 설정
         this.init();
@@ -26,8 +27,8 @@ class World {
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         document.body.appendChild(this.renderer.domElement);
         
-        // 카메라 위치 설정
-        this.camera.position.set(50, 30, 50);
+        // 카메라 위치 설정 - 더 넓은 시야를 위해 높이와 거리 조정
+        this.camera.position.set(50, 40, 70);
         this.camera.lookAt(0, 0, 0);
         
         // 컨트롤 추가
@@ -40,11 +41,17 @@ class World {
         this.controls.mouseButtons = {
             LEFT: THREE.MOUSE.ROTATE,
             MIDDLE: THREE.MOUSE.DOLLY
-            // RIGHT 속성 제거하여 우클릭 비활성화
         };
         
         // 이벤트 리스너 등록
         window.addEventListener('resize', this.onWindowResize.bind(this));
+    }
+    
+    // 메인 선박 설정
+    setMainShip(ship) {
+        this.mainShip = ship;
+        this.addEntity(ship);
+        return this;
     }
     
     // 컴포넌트 등록
@@ -72,6 +79,77 @@ class World {
             }
         }
         return this;
+    }
+    
+    // 일렬로 배치된 추가 드론 생성
+    createDroneFleet(ShipFactory, count, spacing, options = {}) {
+        // this.mainShip 체크는 제거하고 진행
+        
+        const defaultOptions = {
+            basePosition: new THREE.Vector3(0, 0, -spacing), // 시작 위치
+            direction: 0, // 기본 방향 (z+ 방향)
+            movementType: 'auto',
+            bouyancyRange: { min: 1.2, max: 1.4 },
+            pitchRange: { min: 0.8, max: 0.9 },
+            rollRange: { min: 0.7, max: 0.9 },
+            sizeScaleRange: { min: 0.8, max: 1.1 }
+        };
+        
+        // 기본 옵션과 사용자 옵션 병합
+        const finalOptions = { ...defaultOptions, ...options };
+        
+        // 생성된 드론 저장 배열
+        const createdDrones = [];
+        
+        // 드론 생성
+        for (let i = 0; i < count; i++) {
+            // 일렬 배치 좌표 계산 (메인 드론 뒤에 일정 간격으로)
+            const position = new THREE.Vector3(
+                finalOptions.basePosition.x,
+                finalOptions.basePosition.y, 
+                finalOptions.basePosition.z - (i + 1) * spacing
+            );
+            
+            // 크기 스케일 (다양성 추가)
+            const sizeScale = finalOptions.sizeScaleRange.min + 
+                Math.random() * (finalOptions.sizeScaleRange.max - finalOptions.sizeScaleRange.min);
+            
+            // 다양한 물리적 특성 계산
+            const bouyancyFactor = finalOptions.bouyancyRange.min + 
+                Math.random() * (finalOptions.bouyancyRange.max - finalOptions.bouyancyRange.min);
+            
+            const pitchFactor = finalOptions.pitchRange.min + 
+                Math.random() * (finalOptions.pitchRange.max - finalOptions.pitchRange.min);
+            
+            const rollFactor = finalOptions.rollRange.min + 
+                Math.random() * (finalOptions.rollRange.max - finalOptions.rollRange.min);
+            
+            // 드론 생성
+            const drone = ShipFactory.createShip('drone', {
+                position: position,
+                size: { 
+                    length: 12 * sizeScale, 
+                    width: 6 * sizeScale, 
+                    height: 3 * sizeScale 
+                },
+                bouyancyFactor: bouyancyFactor,
+                pitchFactor: pitchFactor,
+                rollFactor: rollFactor,
+                movementType: finalOptions.movementType
+            });
+            
+            // 초기 방향 설정
+            drone.direction = finalOptions.direction;
+            
+            // 월드에 추가
+            this.addEntity(drone);
+            createdDrones.push(drone);
+            
+            // 콘솔에 드론 생성 로그
+            console.log(`드론 #${i+1} 생성: 위치(${position.x.toFixed(1)}, ${position.y.toFixed(1)}, ${position.z.toFixed(1)})`);
+        }
+        
+        return createdDrones;
     }
     
     // 월드 업데이트

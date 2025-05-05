@@ -1,0 +1,30 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+Before writing any code, follow these principles strictly:
+
+1. Carefully and thoroughly understand the user's requirements.  
+   ❗ If any part of the request is unclear, ambiguous, or underspecified, ask clarifying questions before proceeding.
+
+2. Think step-by-step and write a detailed pseudocode or implementation plan before starting the actual code.
+
+3. After verifying the plan, write code that:
+   - Is 100% correct, complete, and fulfills all requested features.
+   - Does not leave any TODOs, missing parts, or placeholders.
+   - Is clean, bug-free, and ready for production.
+   - Is safe, secure, efficient, and optimized for performance.
+   - Maintains or improves existing functionality, without breaking anything.
+
+4. ⚠️ Do **not** add any features or behaviors that were not explicitly requested.  
+   Stick exactly to the described requirements — no assumptions, no extra logic, no unnecessary enhancements.
+
+5. Double-check that the code is final, polished, and fully working as intended.
+
+Ensure that:
+- All edge cases are handled.
+- Code quality is high (clean, readable, maintainable).
+- No incomplete work remains.
+
+Only proceed when you are confident the implementation is robust, complete, and precisely aligned with the user's intent.

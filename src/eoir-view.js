@@ -16,7 +16,7 @@ const material = new THREE.MeshBasicMaterial({
     transparent: true,
     depthTest: false
 });
-material.color = new THREE.Color(1, 1.2, 2);
+material.color = new THREE.Color(1, 1, 1);
 const plane = new THREE.Mesh(geometry, material);
 scene.add(plane);
 

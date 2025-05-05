@@ -141,8 +141,7 @@ class World {
             // 초기 방향 설정
             drone.direction = finalOptions.direction;
             
-            // 월드에 추가
-            this.addEntity(drone);
+            // 배열에만 추가하고, 월드에는 아직 추가하지 않음
             createdDrones.push(drone);
             
             // 콘솔에 드론 생성 로그

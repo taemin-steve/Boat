@@ -10,7 +10,7 @@ class AttackDroneShip extends Ship {
         const droneShipOptions = {
             ...options,
             size: options.size || { length: 12, width: 6, height: 3 },
-            color: options.color || 0xFF5500, // 밝은 주황색
+            color: options.color || 0xFFD580, // 밝은 주황색
             speed: options.speed || 0.2,
             bouyancyFactor: options.bouyancyFactor || 1.2, // 높은 부력 (빠르게 파도 위에 떠있음)
             pitchFactor: options.pitchFactor || 0.9,       // 낮은 피치 (안정적인 선체)
@@ -27,8 +27,8 @@ class AttackDroneShip extends Ship {
         
         // EOIR 카메라 조작 관련 속성 (먼저 초기화)
         this.eoirControls = {
-            panSpeed: 0.005,       // 패닝 속도
-            tiltSpeed: 0.005,      // 틸트 속도
+            panSpeed: 0.007,       // 패닝 속도
+            tiltSpeed: 0.007,      // 틸트 속도
             minFOV: 10,           // 최소 FOV (최대 줌인)
             maxFOV: 60,           // 최대 FOV (최소 줌인)
             defaultFOV: 40,       // 기본 FOV
@@ -42,10 +42,10 @@ class AttackDroneShip extends Ship {
                 zoomOut: false    // E
             },
             limits: {             // 회전 한계
-                minPan: -Math.PI * 0.6,  // 좌측 회전 한계
-                maxPan: Math.PI * 0.6,   // 우측 회전 한계
-                minTilt: -Math.PI * 0.25, // 하단 회전 한계
-                maxTilt: Math.PI * 0.25   // 상단 회전 한계
+                minPan: -Math.PI * 2,  // 좌측 회전 한계
+                maxPan: Math.PI * 2,   // 우측 회전 한계
+                minTilt: -Math.PI * 2, // 하단 회전 한계
+                maxTilt: Math.PI * 2   // 상단 회전 한계
             },
             currentRotation: {    // 현재 회전 상태
                 pan: 0,           // 수평 회전 (좌우)
@@ -230,7 +230,7 @@ class AttackDroneShip extends Ship {
         
         // 운항용 카메라와 완전히 같은 위치에 EOIR 카메라 배치 (선체에 부착된 형태)
         const cameraOffsetForward = 2; // 선수로부터 전방 오프셋 (운항용 카메라와 동일)
-        const cameraHeight = 4;      // 선체 위 높이 (운항용 카메라와 동일)
+        const cameraHeight = 10;      // 선체 위 높이 (운항용 카메라와 동일)
         
         // EOIR 카메라 위치 설정 (운항용 카메라와 동일한 위치)
         position.x += Math.sin(direction) * cameraOffsetForward;

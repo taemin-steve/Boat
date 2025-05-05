@@ -6,6 +6,7 @@ import Lighting from './components/Lighting';
 import ShipFactory from './entities/ship/ShipFactory';
 import ManualMovement from './entities/ship/movement/ManualMovement';
 import AutoMovement from './entities/ship/movement/AutoMovement';
+import interfaceManager from './ui/InterfaceManager';
 
 // 전역 변수 선언
 let world;
@@ -254,21 +255,21 @@ function updateViewports() {
 
 // 메인 초기화 함수
 function initializeApp() {
-// 월드 생성
+    // 월드 생성
     world = new World();
 
-// 컴포넌트 추가
-const sky = new Sky();
-sky.create(world.scene);
-world.addComponent('sky', sky);
+    // 컴포넌트 추가
+    const sky = new Sky();
+    sky.create(world.scene);
+    world.addComponent('sky', sky);
 
-const lighting = new Lighting();
-lighting.create(world.scene);
-world.addComponent('lighting', lighting);
+    const lighting = new Lighting();
+    lighting.create(world.scene);
+    world.addComponent('lighting', lighting);
 
-const ocean = new Ocean();
-ocean.create(world.scene);
-world.addComponent('ocean', ocean);
+    const ocean = new Ocean();
+    ocean.create(world.scene);
+    world.addComponent('ocean', ocean);
 
     // 추가 공격용 드론 5대 생성 (일렬 배치, 간격 50)
     // 첫 번째 드론은 수동 제어, 나머지는 자동 제어로 설정
@@ -277,37 +278,31 @@ world.addComponent('ocean', ocean);
         basePosition: new THREE.Vector3(0, 0, 0)  // 원점에서 시작
     };
     
+    // 드론 함대 생성
     ourFleet = world.createDroneFleet(ShipFactory, 5, 50, droneOptions);
-    
-    // 각 드론에 고유한 속성 부여
-    ourFleet.forEach((drone, index) => {
-        // 첫 번째 드론만 수동 제어로 설정
-        if (index === 0) {
-            if (drone.movementStrategy) {
-                // 기존 이동 전략 제거
-                drone.movementStrategy = null;
-                
-                // 수동 이동 전략 적용
-                drone.movementStrategy = new ManualMovement(drone);
-            }
-        } else {
-            // 나머지 드론은 자동 이동 전략 적용
-            if (drone.movementStrategy) {
-                // 기존 이동 전략 제거
-                drone.movementStrategy = null;
-                
-                // 자동 이동 전략 적용
-                drone.movementStrategy = new AutoMovement(drone);
-            }
-        }
-        
-        // 각 드론에 ID 부여
-        drone.id = `Drone-${index + 1}`;
-    });
     
     // 첫 번째 드론을 메인 선박으로 설정
     mainShip = ourFleet[0];
     activeShipIndex = 0;
+    
+    // 각 드론에 고유한 속성 부여
+    ourFleet.forEach((drone, index) => {
+        // 각 드론에 ID 부여
+        drone.id = `Drone-${index + 1}`;
+        
+        // 기존 이동 전략 제거
+        drone.movementStrategy = null;
+        
+        // 첫 번째 드론만 수동 제어로 설정
+        if (index === 0) {
+            const manualMove = new ManualMovement();
+            drone.setMovementStrategy(manualMove);
+        } else {
+            // 나머지 드론은 자동 이동 전략 적용
+            const autoMove = new AutoMovement();
+            drone.setMovementStrategy(autoMove);
+        }
+    });
     
     // 모든 드론을 월드에 추가
     ourFleet.forEach(drone => {
@@ -345,7 +340,7 @@ world.addComponent('ocean', ocean);
     world.render = () => {
         const renderer = world.renderer;
         
-        if (splitScreenMode && mainShip.eoirCamera) {
+        if (splitScreenMode && mainShip && mainShip.eoirCamera) {
             // 메인 뷰 렌더링 (활성 카메라)
             renderer.setViewport(mainViewport.x, mainViewport.y, mainViewport.width, mainViewport.height);
             renderer.setScissor(mainViewport.x, mainViewport.y, mainViewport.width, mainViewport.height);
@@ -358,10 +353,10 @@ world.addComponent('ocean', ocean);
             renderer.render(world.scene, mainShip.eoirCamera);
             
             // 화면 분할선 표시
-            drawSplitLineOverlay();
+            interfaceManager.drawSplitLineOverlay(splitScreenMode);
             
             // 뷰 정보 표시
-            drawViewInfo();
+            interfaceManager.drawViewInfo(activeShipIndex, useShipCamera, splitScreenMode, mainShip);
             
             // EOIR 창이 열려있으면 프레임 캡처 및 전송
             captureAndSendEoirFrame();
@@ -379,7 +374,6 @@ world.addComponent('ocean', ocean);
 
     // 애니메이션 시작
     world.start();
-
 }
 
 // 카메라 업데이트 함수
@@ -406,143 +400,6 @@ const updateCameras = () => {
         world.camera.lookAt(mainShip.mesh.position);
         activeCamera = world.camera;
     }
-};
-
-// 분할선 오버레이 그리기
-const drawSplitLineOverlay = () => {
-    // DOM 요소가 없으면 생성
-    let splitLine = document.getElementById('split-line');
-    if (!splitLine) {
-        splitLine = document.createElement('div');
-        splitLine.id = 'split-line';
-        splitLine.style.position = 'absolute';
-        splitLine.style.top = '0';
-        splitLine.style.width = '2px';
-        splitLine.style.height = '100%';
-        splitLine.style.backgroundColor = 'white';
-        splitLine.style.zIndex = '1000';
-        document.body.appendChild(splitLine);
-    }
-    
-    // 위치 업데이트
-    splitLine.style.left = (window.innerWidth / 2 - 1) + 'px';
-    splitLine.style.display = splitScreenMode ? 'block' : 'none';
-};
-
-// 뷰 정보 표시
-const drawViewInfo = () => {
-    // 메인 뷰 라벨
-    let mainViewLabel = document.getElementById('main-view-label');
-    if (!mainViewLabel) {
-        mainViewLabel = document.createElement('div');
-        mainViewLabel.id = 'main-view-label';
-        mainViewLabel.style.position = 'absolute';
-        mainViewLabel.style.top = '10px';
-        mainViewLabel.style.left = '10px';
-        mainViewLabel.style.color = 'white';
-        mainViewLabel.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-        mainViewLabel.style.padding = '5px';
-        mainViewLabel.style.borderRadius = '3px';
-        mainViewLabel.style.fontFamily = 'Arial, sans-serif';
-        mainViewLabel.style.fontSize = '14px';
-        mainViewLabel.style.zIndex = '1001';
-        document.body.appendChild(mainViewLabel);
-    }
-    
-    // EOIR 뷰 라벨
-    let eoirViewLabel = document.getElementById('eoir-view-label');
-    if (!eoirViewLabel) {
-        eoirViewLabel = document.createElement('div');
-        eoirViewLabel.id = 'eoir-view-label';
-        eoirViewLabel.style.position = 'absolute';
-        eoirViewLabel.style.top = '10px';
-        eoirViewLabel.style.color = 'white';
-        eoirViewLabel.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-        eoirViewLabel.style.padding = '5px';
-        eoirViewLabel.style.borderRadius = '3px';
-        eoirViewLabel.style.fontFamily = 'Arial, sans-serif';
-        eoirViewLabel.style.fontSize = '14px';
-        eoirViewLabel.style.zIndex = '1001';
-        document.body.appendChild(eoirViewLabel);
-    }
-    
-    // 위치와 내용 업데이트
-    mainViewLabel.textContent = `드론 #${activeShipIndex + 1} ${useShipCamera ? '(1인칭 카메라)' : '(3인칭 카메라)'} - 화살표 키로 이동 | Ctrl+숫자로 드론 전환`;
-    mainViewLabel.style.display = splitScreenMode ? 'block' : 'none';
-    
-    eoirViewLabel.textContent = `드론 #${activeShipIndex + 1} EOIR 카메라 - WASDQE로 제어`;
-    eoirViewLabel.style.left = (window.innerWidth / 2 + 10) + 'px';
-    eoirViewLabel.style.display = splitScreenMode ? 'block' : 'none';
-    
-    // EOIR 카메라 상태 표시
-    if (mainShip && mainShip.eoirCamera) {
-        let eoirStatus = document.getElementById('eoir-status');
-        if (!eoirStatus) {
-            eoirStatus = document.createElement('div');
-            eoirStatus.id = 'eoir-status';
-            eoirStatus.style.position = 'absolute';
-            eoirStatus.style.bottom = '10px';
-            eoirStatus.style.right = '10px';
-            eoirStatus.style.color = 'white';
-            eoirStatus.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-            eoirStatus.style.padding = '5px';
-            eoirStatus.style.borderRadius = '3px';
-            eoirStatus.style.fontFamily = 'monospace';
-            eoirStatus.style.fontSize = '12px';
-            eoirStatus.style.zIndex = '1001';
-            document.body.appendChild(eoirStatus);
-        }
-        
-        // 컨트롤 가이드 생성
-        let controlGuide = document.getElementById('control-guide');
-        if (!controlGuide) {
-            controlGuide = document.createElement('div');
-            controlGuide.id = 'control-guide';
-            controlGuide.style.position = 'absolute';
-            controlGuide.style.bottom = '10px';
-            controlGuide.style.left = (window.innerWidth / 2 + 10) + 'px';
-            controlGuide.style.color = 'white';
-            controlGuide.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-            controlGuide.style.padding = '5px';
-            controlGuide.style.borderRadius = '3px';
-            controlGuide.style.fontFamily = 'monospace';
-            controlGuide.style.fontSize = '12px';
-            controlGuide.style.zIndex = '1001';
-            document.body.appendChild(controlGuide);
-        }
-        
-        const pan = Math.round(mainShip.eoirControls.currentRotation.pan * 180 / Math.PI);
-        const tilt = Math.round(mainShip.eoirControls.currentRotation.tilt * 180 / Math.PI);
-        const fov = Math.round(mainShip.eoirCamera.fov);
-        const zoom = Math.round(60 / fov * 40); // 40x를 기준으로 계산
-        
-        eoirStatus.textContent = `EOIR 상태: 팬: ${pan}° 틸트: ${tilt}° 줌: ${zoom}x`;
-        eoirStatus.style.display = splitScreenMode ? 'block' : 'none';
-        
-        controlGuide.innerHTML = `EOIR 제어: W/S - 틸트 상/하 | A/D - 팬 좌/우 | Q/E - 줌 인/아웃`;
-        controlGuide.style.display = splitScreenMode ? 'block' : 'none';
-    }
-    
-    // 이동 컨트롤 가이드
-    let moveGuide = document.getElementById('move-guide');
-    if (!moveGuide) {
-        moveGuide = document.createElement('div');
-        moveGuide.id = 'move-guide';
-        moveGuide.style.position = 'absolute';
-        moveGuide.style.bottom = '10px';
-        moveGuide.style.left = '10px';
-        moveGuide.style.color = 'white';
-        moveGuide.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-        moveGuide.style.padding = '5px';
-        moveGuide.style.borderRadius = '3px';
-        moveGuide.style.fontFamily = 'monospace';
-        moveGuide.style.fontSize = '12px';
-        moveGuide.style.zIndex = '1001';
-        document.body.appendChild(moveGuide);
-    }
-    
-    moveGuide.innerHTML = `조작: ↑/↓ - 전진/후진 | ←/→ - 좌/우회전 | C - 카메라 전환 | V - 화면분할 | Ctrl+1~5 - 드론 전환`;
-    moveGuide.style.display = 'block';
 };
 
 // EOIR 창을 열거나 닫는 함수
@@ -582,7 +439,7 @@ function captureAndSendEoirFrame() {
     
     // 렌더링된 이미지 캡처
     const renderer = world.renderer;
-    
+
     // 150% 해상도로 증가 (더 선명한 이미지를 위해)
     const scale = 1.5;
     const width = Math.floor(renderer.domElement.width * scale);
@@ -658,7 +515,8 @@ function switchActiveShip(newIndex) {
             mainShip.movementStrategy = null;
             
             // 자동 이동 전략으로 교체
-            mainShip.movementStrategy = new AutoMovement(mainShip);
+            const autoMove = new AutoMovement();
+            mainShip.setMovementStrategy(autoMove);
         }
     }
     
@@ -667,12 +525,13 @@ function switchActiveShip(newIndex) {
     mainShip = ourFleet[activeShipIndex];
     
     // 새 선박의 움직임 타입을 수동으로 변경
-    if (mainShip && mainShip.movementStrategy) {
+    if (mainShip) {
         // 기존 이동 전략 제거
         mainShip.movementStrategy = null;
         
         // 수동 이동 전략 적용
-        mainShip.movementStrategy = new ManualMovement(mainShip);
+        const manualMove = new ManualMovement();
+        mainShip.setMovementStrategy(manualMove);
     }
     
     // 메인 선박을 World에 등록

@@ -7,6 +7,7 @@ import ShipFactory from './entities/ship/ShipFactory';
 import ManualMovement from './entities/ship/movement/ManualMovement';
 import AutoMovement from './entities/ship/movement/AutoMovement';
 import interfaceManager from './ui/InterfaceManager';
+import { toggleEoirWindow, captureAndSendEoirFrame } from './utils/EOIR';
 
 // 전역 변수 선언
 let world;
@@ -21,10 +22,6 @@ let splitScreenMode = true; // 분할 화면 모드 활성화
 let eoirViewport = { x: 0, y: 0, width: 0, height: 0 }; // EOIR 뷰포트
 let mainViewport = { x: 0, y: 0, width: 0, height: 0 }; // 메인 뷰포트
 
-// EOIR 외부 창 관련 변수
-let eoirWindow = null;
-let isEoirWindowOpen = false;
-let eoirFrameCount = 0;
 
 // 최상위 레벨에서 키 이벤트 리스너 등록
 document.addEventListener('keydown', (event) => {
@@ -359,7 +356,7 @@ function initializeApp() {
             interfaceManager.drawViewInfo(activeShipIndex, useShipCamera, splitScreenMode, mainShip);
             
             // EOIR 창이 열려있으면 프레임 캡처 및 전송
-            captureAndSendEoirFrame();
+            captureAndSendEoirFrame(world, mainShip, activeShipIndex);
         } else {
             // 전체 화면 모드 - 활성 카메라만 사용
             renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
@@ -368,7 +365,7 @@ function initializeApp() {
             renderer.render(world.scene, activeCamera);
             
             // EOIR 창이 열려있으면 프레임 캡처 및 전송
-            captureAndSendEoirFrame();
+            captureAndSendEoirFrame(world, mainShip, activeShipIndex);
         }
     };
 
@@ -401,107 +398,6 @@ const updateCameras = () => {
         activeCamera = world.camera;
     }
 };
-
-// EOIR 창을 열거나 닫는 함수
-function toggleEoirWindow() {
-    if (isEoirWindowOpen && eoirWindow && !eoirWindow.closed) {
-        eoirWindow.close();
-        isEoirWindowOpen = false;
-        console.log('EOIR 창 닫기');
-    } else {
-        // 새 창 열기
-        eoirWindow = window.open('eoir-view.html', 'EOIR View', 'width=800,height=600,resizable=yes');
-        if (eoirWindow) {
-            isEoirWindowOpen = true;
-            console.log('EOIR 창 열기');
-            
-            // 창이 닫힐 때 상태 업데이트
-            eoirWindow.addEventListener('beforeunload', () => {
-                isEoirWindowOpen = false;
-                console.log('EOIR 창이 닫혔습니다');
-            });
-        } else {
-            console.error('EOIR 창을 열 수 없습니다. 팝업 차단을 확인하세요.');
-        }
-    }
-}
-
-// EOIR 이미지를 캡처하고 새 창으로 전송하는 함수
-function captureAndSendEoirFrame() {
-    if (!isEoirWindowOpen || !eoirWindow || eoirWindow.closed || !mainShip || !mainShip.eoirCamera) {
-        return;
-    }
-    
-    // 2프레임마다 업데이트 (성능 최적화)
-    if (eoirFrameCount++ % 2 !== 0) {
-        return;
-    }
-    
-    // 렌더링된 이미지 캡처
-    const renderer = world.renderer;
-
-    // 150% 해상도로 증가 (더 선명한 이미지를 위해)
-    const scale = 1.5;
-    const width = Math.floor(renderer.domElement.width * scale);
-    const height = Math.floor(renderer.domElement.height * scale);
-    
-    // 임시 렌더 대상 생성 (고해상도)
-    const renderTarget = new THREE.WebGLRenderTarget(width, height, {
-        minFilter: THREE.LinearFilter,
-        magFilter: THREE.LinearFilter,
-        format: THREE.RGBAFormat,
-        encoding: THREE.sRGBEncoding
-    });
-    
-    // 원래 렌더러 설정 백업
-    const originalRenderTarget = renderer.getRenderTarget();
-    
-    // 현재 선택된 드론의 EOIR 카메라로 씬을 렌더링
-    renderer.setRenderTarget(renderTarget);
-    renderer.render(world.scene, mainShip.eoirCamera);
-    
-    // 렌더링된 이미지 데이터 가져오기
-    const buffer = new Uint8Array(width * height * 4);
-    renderer.readRenderTargetPixels(renderTarget, 0, 0, width, height, buffer);
-    
-    // 원래 렌더 대상으로 복원
-    renderer.setRenderTarget(originalRenderTarget);
-    
-    // 캔버스 생성 및 이미지 데이터 변환
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const context = canvas.getContext('2d');
-    
-    // 이미지 데이터 생성
-    const imageData = context.createImageData(width, height);
-    imageData.data.set(buffer);
-    context.putImageData(imageData, 0, 0);
-    
-    // 이미지 후처리 - 선명도 향상
-    context.filter = 'contrast(1.1) brightness(1.05) saturate(1.2)';
-    context.drawImage(canvas, 0, 0);
-    context.filter = 'none';
-    
-    // 드론 번호 및 상태 정보 표시
-    context.font = 'bold 16px Arial';
-    context.fillStyle = '#00FF00';
-    context.fillText(`드론 #${activeShipIndex + 1} EOIR`, 20, 30);
-    
-    // 이미지를 고품질 JPEG로 변환 (0.92 품질)
-    const dataURL = canvas.toDataURL('image/jpeg', 0.92);
-    
-    // 새 창으로 데이터 전송
-    eoirWindow.postMessage({
-        type: 'eoirFrame',
-        imageData: dataURL,
-        isDestroyed: false, // 필요한 경우 파괴 상태 설정
-        droneId: activeShipIndex + 1 // 현재 드론 번호 전달
-    }, '*');
-    
-    // 렌더 대상 해제
-    renderTarget.dispose();
-}
 
 // 선박 전환 함수
 function switchActiveShip(newIndex) {

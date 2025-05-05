@@ -247,7 +247,8 @@ class AttackDroneShip extends Ship {
         );
         
         // 틸트와 팬 각도에 따른 조정
-        const rotatedOffset = new THREE.Vector3(0, 0, 30); // 기본 z+ 방향을 바라봄
+        // const rotatedOffset = new THREE.Vector3(0, 0, 30); // 기본 z+ 방향을 바라봄
+        const rotatedOffset = new THREE.Vector3(0, 0, 90); // 기본 z+ 방향을 바라봄
         
         // 틸트 (X축 회전) 적용
         rotatedOffset.applyAxisAngle(new THREE.Vector3(1, 0, 0), this.eoirControls.currentRotation.tilt);

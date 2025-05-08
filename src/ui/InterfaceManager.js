@@ -65,10 +65,10 @@ class InterfaceManager {
             document.body.appendChild(this.mainViewLabel);
         }
         
-        // EOIR 뷰 라벨
+        // EOIR 뷰 라벨을 미니맵 뷰 라벨로 변경
         if (!this.eoirViewLabel) {
             this.eoirViewLabel = document.createElement('div');
-            this.eoirViewLabel.id = 'eoir-view-label';
+            this.eoirViewLabel.id = 'minimap-view-label';
             this.eoirViewLabel.style.position = 'absolute';
             this.eoirViewLabel.style.top = '10px';
             this.eoirViewLabel.style.color = 'white';
@@ -85,7 +85,8 @@ class InterfaceManager {
         this.mainViewLabel.textContent = `드론 #${activeShipIndex + 1} ${useShipCamera ? '(1인칭 카메라)' : '(3인칭 카메라)'} - 화살표 키로 이동 | Ctrl+숫자로 드론 전환`;
         this.mainViewLabel.style.display = splitScreenMode ? 'block' : 'none';
         
-        this.eoirViewLabel.textContent = `드론 #${activeShipIndex + 1} EOIR 카메라 - WASDQE로 제어`;
+        // 미니맵 라벨로 변경
+        this.eoirViewLabel.textContent = `미니맵 - M키로 확대/축소 | O키로 EOIR 창 열기`;
         this.eoirViewLabel.style.left = (window.innerWidth / 2 + 10) + 'px';
         this.eoirViewLabel.style.display = splitScreenMode ? 'block' : 'none';
         
@@ -155,6 +156,35 @@ class InterfaceManager {
         
         this.moveGuide.innerHTML = `조작: ↑/↓ - 전진/후진 | ←/→ - 좌/우회전 | C - 카메라 전환 | V - 화면분할 | Ctrl+1~5 - 드론 전환`;
         this.moveGuide.style.display = 'block';
+    }
+
+    // 미니맵 테두리 그리기 함수
+    drawMinimapBorder(viewport) {
+        // 미니맵 테두리 스타일 설정
+        const ctx = this.ctx;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.lineWidth = 2;
+        
+        // 테두리 그리기
+        ctx.beginPath();
+        ctx.rect(viewport.x, viewport.y, viewport.width, viewport.height);
+        ctx.stroke();
+        
+        // 미니맵 제목 표시
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+        ctx.fillRect(viewport.x, viewport.y - 25, 80, 25);
+        
+        ctx.fillStyle = 'white';
+        ctx.font = '14px Arial';
+        ctx.fillText('미니맵', viewport.x + 10, viewport.y - 8);
+        
+        // 확대/축소 안내 표시
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+        ctx.fillRect(viewport.x + viewport.width - 120, viewport.y + viewport.height - 25, 120, 25);
+        
+        ctx.fillStyle = 'white';
+        ctx.font = '12px Arial';
+        ctx.fillText('M키: 확대/축소', viewport.x + viewport.width - 110, viewport.y + viewport.height - 8);
     }
 }
 

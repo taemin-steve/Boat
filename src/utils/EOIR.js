@@ -25,6 +25,7 @@ export function toggleEoirWindow() {
                 <!DOCTYPE html>
                 <html>
                 <head>
+                    <title>EOIR 카메라 뷰</title>
                     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
                     <style>
                         body { margin: 0; overflow: hidden; background-color: #000; }
@@ -88,6 +89,7 @@ export function toggleEoirWindow() {
                             font-family: monospace; 
                             z-index: 100;
                             font-size: 14px;
+                            cursor: pointer;
                         }
                         #thermal-overlay {
                             position: absolute;
@@ -167,6 +169,9 @@ export function toggleEoirWindow() {
             
             isEoirWindowOpen = true;
             console.log('EOIR 창 열기');
+            
+            // 창이 열리면 즉시 포커스 이동
+            eoirWindow.focus();
         } else {
             console.error('EOIR 창을 열 수 없습니다. 팝업 차단을 확인하세요.');
         }
@@ -180,31 +185,72 @@ export function toggleEoirWindow() {
  * @param {number} activeShipIndex - 현재 선택된 선박 인덱스
  */
 export function captureAndSendEoirFrame(world, mainShip, activeShipIndex) {
+    // EOIR 창이 닫혀있거나, 선박이 없거나, EOIR 카메라가 없으면 무시
     if (!isEoirWindowOpen || !eoirWindow || eoirWindow.closed || !mainShip || !mainShip.eoirCamera) {
         return;
     }
     
     // 렌더러가 생성되어 있지 않으면 무시
     if (!eoirRenderer) {
+        console.log('EOIR 렌더러가 초기화되지 않았습니다. 재시도합니다.');
+        // 다음 프레임에서 다시 시도하도록 렌더러 재초기화
+        setTimeout(() => {
+            if (eoirWindow && !eoirWindow.closed) {
+                const canvas = eoirWindow.document.querySelector('canvas');
+                if (canvas) {
+                    eoirRenderer = new THREE.WebGLRenderer({ 
+                        canvas: canvas, 
+                        antialias: true 
+                    });
+                    eoirRenderer.setSize(eoirWindow.innerWidth, eoirWindow.innerHeight);
+                    eoirRenderer.outputColorSpace = THREE.SRGBColorSpace;
+                }
+            }
+        }, 100);
         return;
     }
     
-    // 현재 드론 카메라의 설정을 복사
-    mainShip.eoirCamera.updateProjectionMatrix();
-    
-    // 현재 선택된 드론의 EOIR 카메라로 씬을 렌더링 (셰이더 효과 적용)
-    eoirRenderer.autoClear = true;
-    eoirRenderer.render(world.scene, mainShip.eoirCamera);
-    
-    // 정보 요소 업데이트
-    const infoElement = eoirWindow.document.getElementById('info');
-    if (infoElement) {
-        const pan = Math.round(mainShip.eoirControls.currentRotation.pan * 180 / Math.PI);
-        const tilt = Math.round(mainShip.eoirControls.currentRotation.tilt * 180 / Math.PI);
-        const fov = Math.round(mainShip.eoirCamera.fov);
-        const zoom = Math.round(60 / fov * 40); // 40x를 기준으로 계산
+    try {
+        // EOIR 카메라 설정 업데이트 (화면 크기에 맞게)
+        if (mainShip.eoirCamera.aspect !== eoirWindow.innerWidth / eoirWindow.innerHeight) {
+            mainShip.eoirCamera.aspect = eoirWindow.innerWidth / eoirWindow.innerHeight;
+            mainShip.eoirCamera.updateProjectionMatrix();
+        }
         
-        infoElement.textContent = `드론 #${activeShipIndex + 1} EOIR - 팬: ${pan}° 틸트: ${tilt}° 줌: ${zoom}x - ${new Date().toLocaleTimeString()}`;
+        // 현재 선택된 드론의 EOIR 카메라로 씬을 렌더링
+        eoirRenderer.autoClear = true;
+        eoirRenderer.render(world.scene, mainShip.eoirCamera);
+        
+        // 정보 요소 업데이트
+        const infoElement = eoirWindow.document.getElementById('info');
+        if (infoElement) {
+            // EOIR 카메라 상태 정보
+            let infoText = `드론 #${activeShipIndex + 1} EOIR - `;
+            
+            // 카메라 회전 각도 정보
+            if (mainShip.eoirControls && mainShip.eoirControls.currentRotation) {
+                const pan = Math.round(mainShip.eoirControls.currentRotation.pan * 180 / Math.PI);
+                const tilt = Math.round(mainShip.eoirControls.currentRotation.tilt * 180 / Math.PI);
+                infoText += `팬: ${pan}° 틸트: ${tilt}° `;
+            }
+            
+            // 줌 정보
+            if (mainShip.eoirCamera) {
+                const fov = Math.round(mainShip.eoirCamera.fov);
+                const zoom = Math.round(60 / fov * 40); // 40x를 기준으로 계산
+                infoText += `줌: ${zoom}x - `;
+            }
+            
+            // 시간 정보
+            infoText += `${new Date().toLocaleTimeString()}`;
+            
+            // 정보 업데이트
+            infoElement.textContent = infoText;
+        }
+    } catch (error) {
+        console.error('EOIR 렌더링 중 오류 발생:', error);
+        // 오류가 발생하면 렌더러 재초기화
+        eoirRenderer = null;
     }
 }
 

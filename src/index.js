@@ -7,6 +7,7 @@ import ShipFactory from './entities/ship/ShipFactory';
 import ManualMovement from './entities/ship/movement/ManualMovement';
 import AutoMovement from './entities/ship/movement/AutoMovement';
 import interfaceManager from './ui/InterfaceManager';
+import Minimap from './utils/Minimap';
 import { toggleEoirWindow, captureAndSendEoirFrame } from './utils/EOIR';
 
 // 전역 변수 선언
@@ -16,10 +17,11 @@ let activeCamera; // 현재 활성화된 카메라 (1인칭 또는 3인칭)
 let useShipCamera = true; // 기본적으로 드론 카메라 사용
 let ourFleet; // 드론 함대 배열
 let activeShipIndex = 0; // 현재 활성화된 선박의 인덱스
+let minimap; // 미니맵 컴포넌트
 
 // 화면 분할 변수
 let splitScreenMode = true; // 분할 화면 모드 활성화
-let eoirViewport = { x: 0, y: 0, width: 0, height: 0 }; // EOIR 뷰포트
+let minimapViewport = { x: 0, y: 0, width: 0, height: 0 }; // 미니맵 뷰포트
 let mainViewport = { x: 0, y: 0, width: 0, height: 0 }; // 메인 뷰포트
 
 
@@ -101,42 +103,28 @@ document.addEventListener('keydown', (event) => {
         event.preventDefault();
     }
     
-    if (event.key === 'h' || event.key === 'H') {
-        // 'H' 키를 누르면 카메라 헬퍼 토글
-        if (mainShip && mainShip.toggleCameraHelper) {
-            mainShip.toggleCameraHelper();
-            console.log('카메라 헬퍼 표시 토글');
-        }
-        event.preventDefault();
-    }
-    
-    if (event.key === 'f' || event.key === 'F') {
-        // 'F' 키를 누르면 무기 발사 시도
-        if (mainShip && mainShip.fireWeapon) {
-            const fired = mainShip.fireWeapon();
-            if (fired) {
-                console.log('무기 발사 성공!');
-            } else {
-                console.log('무기가 충전 중이거나 준비되지 않았습니다.');
-            }
-        }
-        event.preventDefault();
-    }
-    
-    if (event.key === 'r' || event.key === 'R') {
-        // 'R' 키를 누르면 무기 충전
-        if (mainShip && mainShip.chargeWeapon) {
-            mainShip.chargeWeapon(20); // 20% 충전
-            console.log('무기 충전 중...');
-        }
-        event.preventDefault();
-    }
-    
     if (event.key === 'v' || event.key === 'V') {
         // 'V' 키를 누르면 분할 화면 모드 토글
         splitScreenMode = !splitScreenMode;
         console.log(`분할 화면 모드: ${splitScreenMode ? '활성화' : '비활성화'}`);
         updateViewports(); // 뷰포트 재계산
+        event.preventDefault();
+    }
+    
+    if (event.key === 'm' || event.key === 'M') {
+        // 'M' 키를 누르면 미니맵 확대/축소 토글
+        if (minimap) {
+            // 미니맵 확대/축소 비율 토글 (기본 -> 확대 -> 더 확대 -> 기본)
+            const currentZoom = minimap.options.zoom;
+            if (currentZoom === 0.05) {
+                minimap.options.zoom = 0.1; // 확대
+            } else if (currentZoom === 0.1) {
+                minimap.options.zoom = 0.02; // 더 축소된 뷰
+            } else {
+                minimap.options.zoom = 0.05; // 기본으로 복귀
+            }
+            console.log(`미니맵 확대/축소 변경: ${minimap.options.zoom}`);
+        }
         event.preventDefault();
     }
     
@@ -218,10 +206,10 @@ function updateViewports() {
         mainViewport.width = width / 2;
         mainViewport.height = height;
         
-        eoirViewport.x = width / 2;
-        eoirViewport.y = 0;
-        eoirViewport.width = width / 2;
-        eoirViewport.height = height;
+        minimapViewport.x = width / 2;
+        minimapViewport.y = 0;
+        minimapViewport.width = width / 2;
+        minimapViewport.height = height;
     } else {
         // 전체 화면 모드
         mainViewport.x = 0;
@@ -229,11 +217,12 @@ function updateViewports() {
         mainViewport.width = width;
         mainViewport.height = height;
         
-        // EOIR 뷰포트는 사용하지 않지만 일관성을 위해 설정
-        eoirViewport.x = 0;
-        eoirViewport.y = 0;
-        eoirViewport.width = 0;
-        eoirViewport.height = 0;
+        // 미니맵은 작은 창으로 표시
+        const minimapSize = Math.min(300, width * 0.25);
+        minimapViewport.x = width - minimapSize - 20;
+        minimapViewport.y = 20;
+        minimapViewport.width = minimapSize;
+        minimapViewport.height = minimapSize;
     }
     
     // 카메라 종횡비 업데이트
@@ -244,9 +233,15 @@ function updateViewports() {
         }
         
         if (mainShip.eoirCamera) {
-            mainShip.eoirCamera.aspect = eoirViewport.width / eoirViewport.height;
+            mainShip.eoirCamera.aspect = mainViewport.width / mainViewport.height;
             mainShip.eoirCamera.updateProjectionMatrix();
         }
+    }
+    
+    // 월드 카메라도 업데이트
+    if (world && world.camera) {
+        world.camera.aspect = mainViewport.width / mainViewport.height;
+        world.camera.updateProjectionMatrix();
     }
 }
 
@@ -267,6 +262,15 @@ function initializeApp() {
     const ocean = new Ocean();
     ocean.create(world.scene);
     world.addComponent('ocean', ocean);
+    
+    // 미니맵 초기화
+    minimap = new Minimap({
+        size: 350,
+        height: 300,
+        zoom: 0.05,
+        followPlayer: false // 플레이어 추적 비활성화
+    });
+    minimap.create();
 
     // 추가 공격용 드론 5대 생성 (일렬 배치, 간격 50)
     // 첫 번째 드론은 수동 제어, 나머지는 자동 제어로 설정
@@ -299,11 +303,22 @@ function initializeApp() {
             const autoMove = new AutoMovement();
             drone.setMovementStrategy(autoMove);
         }
+        
+        // 미니맵에 드론 추가
+        minimap.addEntity(drone, index === 0 ? 0x00FF00 : 0xFFFF00, 1.0, index);
     });
+    
+    // 현재 플레이어 설정
+    minimap.setPlayer(mainShip);
     
     // 모든 드론을 월드에 추가
     ourFleet.forEach(drone => {
         world.addEntity(drone);
+    });
+    
+    // 섬들을 미니맵에 추가
+    world.islands.forEach(island => {
+        minimap.addIsland(island);
     });
     
     // 메인 선박을 World에 등록
@@ -331,42 +346,54 @@ function initializeApp() {
     world.update = (time) => {
         originalUpdate(time);
         updateCameras();
+        
+        // 미니맵 업데이트
+        if (minimap) {
+            minimap.update(time);
+        }
     };
 
     // World.render 함수를 오버라이드
     world.render = () => {
         const renderer = world.renderer;
         
-        if (splitScreenMode && mainShip && mainShip.eoirCamera) {
+        if (splitScreenMode) {
             // 메인 뷰 렌더링 (활성 카메라)
             renderer.setViewport(mainViewport.x, mainViewport.y, mainViewport.width, mainViewport.height);
             renderer.setScissor(mainViewport.x, mainViewport.y, mainViewport.width, mainViewport.height);
             renderer.setScissorTest(true);
             renderer.render(world.scene, activeCamera);
             
-            // EOIR 카메라 뷰 렌더링
-            renderer.setViewport(eoirViewport.x, eoirViewport.y, eoirViewport.width, eoirViewport.height);
-            renderer.setScissor(eoirViewport.x, eoirViewport.y, eoirViewport.width, eoirViewport.height);
-            renderer.render(world.scene, mainShip.eoirCamera);
+            // 미니맵 렌더링
+            renderer.setViewport(minimapViewport.x, minimapViewport.y, minimapViewport.width, minimapViewport.height);
+            renderer.setScissor(minimapViewport.x, minimapViewport.y, minimapViewport.width, minimapViewport.height);
+            renderer.render(minimap.scene, minimap.camera);
             
             // 화면 분할선 표시
             interfaceManager.drawSplitLineOverlay(splitScreenMode);
             
             // 뷰 정보 표시
             interfaceManager.drawViewInfo(activeShipIndex, useShipCamera, splitScreenMode, mainShip);
-            
-            // EOIR 창이 열려있으면 프레임 캡처 및 전송
-            captureAndSendEoirFrame(world, mainShip, activeShipIndex);
         } else {
-            // 전체 화면 모드 - 활성 카메라만 사용
-            renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
-            renderer.setScissor(0, 0, window.innerWidth, window.innerHeight);
-            renderer.setScissorTest(false);
+            // 전체 화면 모드 - 활성 카메라 렌더링
+            renderer.setViewport(mainViewport.x, mainViewport.y, mainViewport.width, mainViewport.height);
+            renderer.setScissor(mainViewport.x, mainViewport.y, mainViewport.width, mainViewport.height);
+            renderer.setScissorTest(true);
             renderer.render(world.scene, activeCamera);
             
-            // EOIR 창이 열려있으면 프레임 캡처 및 전송
-            captureAndSendEoirFrame(world, mainShip, activeShipIndex);
+            // 미니맵을 작은 창으로 렌더링
+            if (minimapViewport.width > 0) {
+                renderer.setViewport(minimapViewport.x, minimapViewport.y, minimapViewport.width, minimapViewport.height);
+                renderer.setScissor(minimapViewport.x, minimapViewport.y, minimapViewport.width, minimapViewport.height);
+                renderer.render(minimap.scene, minimap.camera);
+                
+                // 미니맵 테두리 그리기
+                interfaceManager.drawMinimapBorder(minimapViewport);
+            }
         }
+        
+        // EOIR 창이 열려있으면 프레임 캡처 및 전송
+        captureAndSendEoirFrame(world, mainShip, activeShipIndex);
     };
 
     // 애니메이션 시작
@@ -432,6 +459,11 @@ function switchActiveShip(newIndex) {
     
     // 메인 선박을 World에 등록
     world.setMainShip(mainShip);
+    
+    // 미니맵에서 플레이어 업데이트
+    if (minimap) {
+        minimap.setPlayer(mainShip);
+    }
     
     // 카메라 업데이트
     updateCameras();

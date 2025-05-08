@@ -1,5 +1,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import RockIsland from './components/island/RockIsland';
+import TreeIsland from './components/island/TreeIsland';
+import VolcanoIsland from './components/island/VolcanoIsland';
 
 class World {
     constructor() {
@@ -15,6 +18,7 @@ class World {
         // 엔티티 저장
         this.entities = [];
         this.mainShip = null; // 메인 선박 참조 저장
+        this.islands = [];
         
         // 기본 설정
         this.init();
@@ -45,6 +49,8 @@ class World {
         
         // 이벤트 리스너 등록
         window.addEventListener('resize', this.onWindowResize.bind(this));
+        
+        this.createIslands();
     }
     
     // 메인 선박 설정
@@ -152,9 +158,7 @@ class World {
     }
     
     // 월드 업데이트
-    update() {
-        const time = this.clock.getElapsedTime();
-        
+    update(time) {
         // 컴포넌트 업데이트
         for (const name in this.components) {
             const component = this.components[name];
@@ -171,6 +175,9 @@ class World {
             }
         }
         
+        // 섬들 업데이트
+        this.islands.forEach(island => island.update(time));
+        
         // 컨트롤 업데이트
         this.controls.update();
     }
@@ -184,7 +191,7 @@ class World {
     animate() {
         requestAnimationFrame(this.animate.bind(this));
         
-        this.update();
+        this.update(this.clock.getElapsedTime());
         this.render();
     }
     
@@ -198,6 +205,29 @@ class World {
         this.camera.aspect = window.innerWidth / window.innerHeight;
         this.camera.updateProjectionMatrix();
         this.renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    createIslands() {
+        // 돌섬 생성
+        const rockIsland = new RockIsland({
+            position: new THREE.Vector3(300, 0, 300),
+            size: { width: 300, height: 150, depth: 300 }
+        }).create(this.scene);
+        this.islands.push(rockIsland);
+
+        // 나무섬 생성
+        const treeIsland = new TreeIsland({
+            position: new THREE.Vector3(-300, 0, -300),
+            size: { width: 400, height: 200, depth: 400 }
+        }).create(this.scene);
+        this.islands.push(treeIsland);
+
+        // 화산섬 생성
+        const volcanoIsland = new VolcanoIsland({
+            position: new THREE.Vector3(0, 0, 600),
+            size: { width: 500, height: 300, depth: 500 }
+        }).create(this.scene);
+        this.islands.push(volcanoIsland);
     }
 }
 

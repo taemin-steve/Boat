@@ -8,9 +8,10 @@
     "build": "parcel build index.html"
   },
   "dependencies": {
-    "three": "^0.159.0"
+    "three": "^0.159.0",
+    "three-noise": "^1.1.2"
   },
   "devDependencies": {
     "parcel-bundler": "^1.12.5"
   }
-} 
+}
